@@ -1,74 +1,33 @@
-#=============================================================================
-#
-#  @@-COPYRIGHT-START-@@
-#
-#  Copyright (c) 2018-2024, Qualcomm Innovation Center, Inc. All rights reserved.
-#
-#  Redistribution and use in source and binary forms, with or without
-#  modification, are permitted provided that the following conditions are met:
-#
-#  1. Redistributions of source code must retain the above copyright notice,
-#     this list of conditions and the following disclaimer.
-#
-#  2. Redistributions in binary form must reproduce the above copyright notice,
-#     this list of conditions and the following disclaimer in the documentation
-#     and/or other materials provided with the distribution.
-#
-#  3. Neither the name of the copyright holder nor the names of its contributors
-#     may be used to endorse or promote products derived from this software
-#     without specific prior written permission.
-#
-#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-#  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-#  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-#  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-#  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-#  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-#  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-#  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-#  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-#  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-#  POSSIBILITY OF SUCH DAMAGE.
-#
-#  SPDX-License-Identifier: BSD-3-Clause
-#
-#  @@-COPYRIGHT-END-@@
-#
-#=============================================================================
+# Pybind11을 찾고 관련 헬퍼 매크로를 정의하는 모듈
+include(FetchContent)
 
-macro(add_library_pybind11)
-    if (NOT ${Python3_FOUND})
-        message(FATAL_ERROR "Need Python3 executable to determine pybind11 include path.")
-    endif()
+# pybind11가 시스템에 없는 경우를 대비하여 FetchContent 선언
+FetchContent_Declare(
+    pybind11
+    GIT_REPOSITORY https://github.com/pybind/pybind11.git
+    GIT_TAG v2.10.0 # 특정 버전 고정
+)
 
-    execute_process(COMMAND ${Python3_EXECUTABLE} "-c" "import pybind11;print(pybind11.get_include())"
-                    RESULT_VARIABLE PYBIND11_NOT_FOUND
-                    OUTPUT_VARIABLE PYBIND11_INCLUDE_DIR_
-                    OUTPUT_STRIP_TRAILING_WHITESPACE
-                    )
+# find_package를 먼저 시도하고, 실패하면 FetchContent를 사용
+find_package(pybind11 CONFIG QUIET)
+if(NOT pybind11_FOUND)
+    message(STATUS "pybind11 not found via find_package. Fetching from source...")
+    FetchContent_MakeAvailable(pybind11)
+else()
+    message(STATUS "Found pybind11 via find_package.")
+endif()
 
-    # If we enable PyTorch builds then use the pybind11 headers that are part of the torch pip install
-    # So we don't have a version mismatch - between PyTorch custom C++ op code and PyMO
-    find_path(PYBIND11_HEADER "pybind11.h"
-            PATHS ${TORCH_INCLUDE_DIRS} ${PYBIND11_INCLUDE_DIR_}
-            PATH_SUFFIXES "pybind11"
-            REQUIRED
-            NO_DEFAULT_PATH
-            NO_CMAKE_FIND_ROOT_PATH
-            )
+# PARENT_SCOPE를 사용하여 pybind11_INCLUDE_DIRS를 전역적으로 사용 가능하게 함
+set(PYBIND11_INCLUDE_DIR ${pybind11_INCLUDE_DIRS} PARENT_SCOPE)
+message(STATUS "Set PyBind11 include directory: ${PYBIND11_INCLUDE_DIR}")
 
-    get_filename_component(PYBIND11_INCLUDE_DIR ${PYBIND11_HEADER} DIRECTORY)
 
-    if (NOT PYBIND11_INCLUDE_DIR)
-        message(FATAL_ERROR "Could not find pybind11.")
-    endif()
-
-    add_library(pybind11 SHARED IMPORTED)
-
-    set_target_properties(pybind11 PROPERTIES
-            IMPORTED_IMPLIB ${Python3_LIBRARIES}
-            IMPORTED_LOCATION ${Python3_LIBRARIES}
-            INTERFACE_INCLUDE_DIRECTORIES "${PYBIND11_INCLUDE_DIR}"
-            INTERFACE_LINK_LIBRARIES Python3::Module
-            )
+# C++ 소스를 파이썬 모듈로 빌드하는 헬퍼 매크로 정의
+macro(add_library_pybind11 target_name)
+    # pybind11_add_module는 pybind11을 add_subdirectory 또는 FetchContent로 포함하면 사용 가능
+    pybind11_add_module(
+        ${target_name}
+        SHARED
+        ${ARGN} # 매크로에 전달된 모든 추가 인자 (소스 파일 목록)
+    )
 endmacro()

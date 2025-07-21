@@ -1,68 +1,36 @@
-#=============================================================================
-#
-#  @@-COPYRIGHT-START-@@
-#
-#  Copyright (c) 2018-2024, Qualcomm Innovation Center, Inc. All rights reserved.
-#
-#  Redistribution and use in source and binary forms, with or without
-#  modification, are permitted provided that the following conditions are met:
-#
-#  1. Redistributions of source code must retain the above copyright notice,
-#     this list of conditions and the following disclaimer.
-#
-#  2. Redistributions in binary form must reproduce the above copyright notice,
-#     this list of conditions and the following disclaimer in the documentation
-#     and/or other materials provided with the distribution.
-#
-#  3. Neither the name of the copyright holder nor the names of its contributors
-#     may be used to endorse or promote products derived from this software
-#     without specific prior written permission.
-#
-#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-#  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-#  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-#  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-#  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-#  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-#  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-#  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-#  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-#  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-#  POSSIBILITY OF SUCH DAMAGE.
-#
-#  SPDX-License-Identifier: BSD-3-Clause
-#
-#  @@-COPYRIGHT-END-@@
-#
-#=============================================================================
+# ONNX Runtime을 찾고 관련 변수를 설정하는 헬퍼 모듈
 
-function(set_onnx_version)
-    if (NOT ${Python3_FOUND})
-        message(FATAL_ERROR "Need Python3 executable to determine ONNX version.")
-    endif()
+# 시스템에 설치된 onnxruntime-gpu 파이썬 패키지 경로를 기반으로 경로를 찾음
+execute_process(
+    COMMAND ${Python3_EXECUTABLE} -c "import os; import onnxruntime; print(os.path.dirname(onnxruntime.__file__))"
+    OUTPUT_VARIABLE ONNXRUNTIME_PYTHON_PATH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
 
-    execute_process(COMMAND "${Python3_EXECUTABLE}" "-c" "import onnx; print(onnx.__version__)"
-            OUTPUT_VARIABLE ONNX_VERSION_
-            OUTPUT_STRIP_TRAILING_WHITESPACE)
+if(ONNXRUNTIME_PYTHON_PATH AND EXISTS "${ONNXRUNTIME_PYTHON_PATH}/capi/onnxruntime_c_api.h")
+    # Python 패키지 내의 C-API 헤더 경로
+    set(ORT_CAPI_PATH "${ONNXRUNTIME_PYTHON_PATH}/capi")
+    # onnxruntime 라이브러리 경로
+    set(ORT_LIB_PATH "${ONNXRUNTIME_PYTHON_PATH}/lib")
+else()
+    message(FATAL_ERROR "Could not find onnxruntime C API headers. Please install 'onnxruntime-gpu'.")
+endif()
 
-    message(STATUS "Found ONNX version: ${ONNX_VERSION_}")
-    set(ONNX_VERSION ${ONNX_VERSION_} PARENT_SCOPE)
-endfunction()
 
-function(set_onnxruntime_variables)
-    find_path(ONNXRUNTIME_INCLUDE_DIR_ "onnxruntime_cxx_api.h"
-            PATHS ${onnxruntime_headers_SOURCE_DIR}/include
-            REQUIRED
-            NO_CMAKE_FIND_ROOT_PATH)
-    find_library(ONNXRUNTIME_LIBRARIES_
-            NAMES libonnxruntime.so onnxruntime.lib
-            PATHS ${onnxruntime_headers_SOURCE_DIR}/lib
-            REQUIRED
-            NO_CMAKE_FIND_ROOT_PATH)
+# find_path와 find_library를 사용하여 최종 경로 변수 설정
+find_path(ONNXRUNTIME_INCLUDE_DIR onnxruntime_cxx_api.h
+    HINTS ${ORT_CAPI_PATH}
+    REQUIRED
+)
 
-    message(STATUS "** ONNXRUNTIME_INCLUDE_DIR = ${ONNXRUNTIME_INCLUDE_DIR_}")
-    set(ONNXRUNTIME_INCLUDE_DIR ${ONNXRUNTIME_INCLUDE_DIR_} PARENT_SCOPE)
+find_library(ONNXRUNTIME_LIBRARIES onnxruntime
+    HINTS ${ORT_LIB_PATH}
+    REQUIRED
+)
 
-    message(STATUS "** ONNXRUNTIME_LIBRARIES = ${ONNXRUNTIME_LIBRARIES_}")
-    set(ONNXRUNTIME_LIBRARIES ${ONNXRUNTIME_LIBRARIES_} PARENT_SCOPE)
-endfunction()
+message(STATUS "Found ONNXRuntime Headers: ${ONNXRUNTIME_INCLUDE_DIR}")
+message(STATUS "Found ONNXRuntime Library: ${ONNXRUNTIME_LIBRARIES}")
+
+# PARENT_SCOPE를 사용하여 이 변수들을 최상위 CMakeLists.txt에서 사용할 수 있게 함
+set(ONNXRUNTIME_INCLUDE_DIR ${ONNXRUNTIME_INCLUDE_DIR} PARENT_SCOPE)
+set(ONNXRUNTIME_LIBRARIES ${ONNXRUNTIME_LIBRARIES} PARENT_SCOPE)
