@@ -1,0 +1,15 @@
+{
+  // C/C++ 확장 프로그램이 compile_commands.json 파일을 사용하도록 설정
+  "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+
+  // CMake 구성(Configure) 시 전달할 인자들
+  "cmake.configureArgs": [
+    "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+  ],
+
+  // CMake 빌드(Build) 시 전달할 인자들 (make -j8)
+  "cmake.buildArgs": [
+    "-j32"
+  ],
+
+}
