@@ -1,73 +1,79 @@
+import os
+import sys
 import onnx
 import onnxruntime as ort
 import numpy as np
+
+# (1) 빌드된 파이썬 모듈 경로 추가
+#    -- CMake 출력 디렉토리 기준으로 경로를 맞춰주세요.
+module_dir = os.path.abspath(os.path.join(os.path.dirname(__file__),
+                                          "..", "build", "python", "my_quant_lib"))
+sys.path.insert(0, module_dir)
+
 import my_quant_lib
-import pytest
-import os
 
 CUSTOM_OP_DOMAIN = 'com.my-quant-lib'
 MODEL_PATH = "test_observer_model_stateful.onnx"
 
 def create_test_model(observer_id, momentum=0.9):
-    """상태 저장소와 연동되는 MovingAverageObserver 모델을 생성합니다."""
     X = onnx.helper.make_tensor_value_info('X', onnx.TensorProto.FLOAT, [None, None])
     Y = onnx.helper.make_tensor_value_info('Y', onnx.TensorProto.FLOAT, [None, None])
-
     observer_node = onnx.helper.make_node(
         'MovingAverageObserver',
         inputs=['X'],
-        outputs=,
+        outputs=['Y'],
         domain=CUSTOM_OP_DOMAIN,
         id=observer_id,
         momentum=float(momentum)
     )
-
     graph = onnx.helper.make_graph(
         [observer_node],
         'observer-graph-stateful',
         [X],
-       
+        [Y]
     )
-
-    opset_imports = [onnx.helper.make_opsetid("", 15)]
-    model = onnx.helper.make_model(graph, opset_imports=opset_imports)
+    model = onnx.helper.make_model(
+        graph,
+        opset_imports=[onnx.helper.make_opsetid("", 15)]
+    )
     onnx.save(model, MODEL_PATH)
-    return MODEL_PATH
 
-@pytest.fixture(scope="module", autouse=True)
-def setup_and_teardown():
-    """테스트 모델을 생성하고 테스트 후 정리합니다."""
-    observer_id = "test_obs_1"
-    create_test_model(observer_id)
-    yield
+def main():
+    obs_id = "test_obs_1"
     if os.path.exists(MODEL_PATH):
         os.remove(MODEL_PATH)
+    create_test_model(obs_id)
 
-def test_stateful_moving_average_observer():
-    observer_id = "test_obs_1"
+    # Observer 등록
+    my_quant_lib.register_observer(obs_id)
 
-    my_quant_lib.register_observer(observer_id)
-
+    # SessionOptions + custom op 라이브러리 로드
     so = ort.SessionOptions()
     lib_path = my_quant_lib.get_library_path()
     so.register_custom_ops_library(lib_path)
 
-    providers =
+    # Providers 설정
+    providers = []
+    if 'CUDAExecutionProvider' in ort.get_available_providers():
+        providers.append('CUDAExecutionProvider')
+    providers.append('CPUExecutionProvider')
+
     sess = ort.InferenceSession(MODEL_PATH, so, providers=providers)
 
-    num_iterations = 10
-    for i in range(num_iterations):
-        input_data = (np.random.rand(10, 20).astype(np.float32) * (10 - i)) + (i / 2.0)
-        outputs = sess.run(None, {'X': input_data})
-        
-        np.testing.assert_array_equal(input_data, outputs)
+    # 10회 inference 및 state 추적
+    for i in range(10):
+        data = (np.random.rand(10, 20).astype(np.float32) * (10 - i)) + (i / 2.0)
+        outputs = sess.run(None, {'X': data})[0]
+        assert np.array_equal(data, outputs), f"Output mismatch at iter {i}"
+        state = my_quant_lib.get_observer_state(obs_id)
+        print(f"[Iter {i+1}] min={state.min:.4f}, max={state.max:.4f}")
 
-        state = my_quant_lib.get_observer_state(observer_id)
-        print(f"Iteration {i+1}: Min={state.min:.4f}, Max={state.max:.4f}")
+    final = my_quant_lib.get_observer_state(obs_id)
+    print(f"Final state: min={final.min:.4f}, max={final.max:.4f}")
 
-    final_state = my_quant_lib.get_observer_state(observer_id)
-    print(f"\nFinal Result: Min={final_state.min:.4f}, Max={final_state.max:.4f}")
+    assert 4.0 < final.min < 5.0, "Final min out of expected range"
+    assert 5.0 < final.max < 6.0, "Final max out of expected range"
+    print("All tests passed!")
 
-    assert 4.0 < final_state.min < 5.0
-    assert 5.0 < final_state.max < 6.0
-    print("Test passed!")
+if __name__ == "__main__":
+    main()
