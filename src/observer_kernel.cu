@@ -34,12 +34,12 @@ __device__ static void atomicMaxFloat(float* addr, float value) {
 
 __global__ void minmax_kernel(const float* input, long long n, float* batch_min, float* batch_max) {
     // [수정] 동적 공유 메모리를 올바르게 배열로 선언
-    extern __shared__ float s_mem;
+    extern __shared__ float s_mem[];
     
     unsigned int tid = threadIdx.x;
     // [수정] 공유 메모리 포인터 설정
     float* s_min = s_mem;
-    float* s_max = &s_min;
+    float* s_max = s_mem + blockDim.x; 
 
     unsigned int i = blockIdx.x * blockDim.x + tid;
 
@@ -65,8 +65,8 @@ __global__ void minmax_kernel(const float* input, long long n, float* batch_min,
 
     if (tid == 0) {
         // [수정] 포인터가 아닌, 리덕션이 완료된 값을 전달
-        atomicMinFloat(batch_min, s_min);
-        atomicMaxFloat(batch_max, s_max);
+        atomicMinFloat(batch_min, s_min[0]);
+        atomicMaxFloat(batch_max, s_max[0]);
     }
 }
 

@@ -24,7 +24,7 @@ void MovingAverageObserverKernel::Compute(OrtKernelContext* context) {
 
     // [수정] auto를 사용하여 rvalue를 올바르게 받도록 함
     auto output_tensor = ctx.GetOutput(0, shape.data(), shape.size());
-    float* Y_data = output_tensor.GetMutableTensorData<float>();
+    float* Y_data = output_tensor.GetTensorMutableData<float>();
 
     ObserverState* state = StateManager::get_instance().get_state_ptr(id_);
 
