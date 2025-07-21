@@ -13,22 +13,25 @@ MovingAverageObserverKernel::MovingAverageObserverKernel(const OrtApi&, const Or
 void MovingAverageObserverKernel::Compute(OrtKernelContext* context) {
     Ort::KernelContext ctx(context);
 
-    const OrtValue* X = ctx.GetInput(0);
-    const float* X_data = X->GetTensorData<float>();
+    // [수정] auto를 사용하여 정확한 타입(const)을 추론하도록 함
+    auto input_tensor = ctx.GetInput(0);
+    const float* X_data = input_tensor.GetTensorData<float>();
 
-    Ort::TensorTypeAndShapeInfo X_info = X->GetTensorTypeAndShapeInfo();
-    auto& shape = X_info.GetShape();
-    OrtValue* Y = ctx.GetOutput(0, shape.data(), shape.size());
-    float* Y_data = Y->GetMutableTensorData<float>();
-    
+    // [수정] auto를 사용하여 정확한 타입(const)을 추론하도록 함
+    auto X_info = input_tensor.GetTensorTypeAndShapeInfo();
+    const auto& shape = X_info.GetShape();
     int64_t num_elements = X_info.GetElementCount();
+
+    // [수정] auto를 사용하여 rvalue를 올바르게 받도록 함
+    auto output_tensor = ctx.GetOutput(0, shape.data(), shape.size());
+    float* Y_data = output_tensor.GetMutableTensorData<float>();
 
     ObserverState* state = StateManager::get_instance().get_state_ptr(id_);
 
-    const OrtApi* api = OrtGetApiBase()->GetApi(ORT_API_VERSION);
-    Ort::Custom::CudaContext cuda_ctx;
-    cuda_ctx.Init(*api, context, nullptr);
-    cudaStream_t stream = cuda_ctx.GetStream();
+    cudaStream_t stream = (cudaStream_t)ctx.GetGPUComputeStream();
+    if (!stream) {
+        throw std::runtime_error("Failed to get CUDA stream from context.");
+    }
 
     launch_observer_kernel(
         X_data, Y_data, num_elements,

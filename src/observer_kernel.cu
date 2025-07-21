@@ -1,18 +1,52 @@
 #include "observer_kernel.cuh"
+#include <cuda_runtime.h> //.cu 파일에서는 CUDA 헤더를 포함합니다.
 #include <float.h>
 
-__global__ void minmax_kernel(const float* input, long long n, float* batch_min, float* batch_max) {
-    extern __shared__ float sdata;
-    float* s_min = sdata;
-    float* s_max = (float*)&sdata;
+// float 타입을 위한 atomicMin/Max 헬퍼 함수 구현
+__device__ static void atomicMinFloat(float* addr, float value) {
+    unsigned int* addr_as_uint = (unsigned int*)addr;
+    unsigned int old_val_uint = *addr_as_uint;
+    unsigned int new_val_uint = __float_as_uint(value);
 
+    while (value < __uint_as_float(old_val_uint)) {
+        unsigned int assumed_val = old_val_uint;
+        old_val_uint = atomicCAS(addr_as_uint, assumed_val, new_val_uint);
+        if (old_val_uint == assumed_val) {
+            break;
+        }
+    }
+}
+
+__device__ static void atomicMaxFloat(float* addr, float value) {
+    unsigned int* addr_as_uint = (unsigned int*)addr;
+    unsigned int old_val_uint = *addr_as_uint;
+    unsigned int new_val_uint = __float_as_uint(value);
+
+    while (value > __uint_as_float(old_val_uint)) {
+        unsigned int assumed_val = old_val_uint;
+        old_val_uint = atomicCAS(addr_as_uint, assumed_val, new_val_uint);
+        if (old_val_uint == assumed_val) {
+            break;
+        }
+    }
+}
+
+
+__global__ void minmax_kernel(const float* input, long long n, float* batch_min, float* batch_max) {
+    // [수정] 동적 공유 메모리를 올바르게 배열로 선언
+    extern __shared__ float s_mem;
+    
     unsigned int tid = threadIdx.x;
-    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+    // [수정] 공유 메모리 포인터 설정
+    float* s_min = s_mem;
+    float* s_max = &s_min;
+
+    unsigned int i = blockIdx.x * blockDim.x + tid;
 
     float my_min = (i < n)? input[i] : FLT_MAX;
     float my_max = (i < n)? input[i] : -FLT_MAX;
 
-    for (i = blockIdx.x * blockDim.x + threadIdx.x; i < n; i += blockDim.x * gridDim.x) {
+    for (i = blockIdx.x * blockDim.x + tid; i < n; i += blockDim.x * gridDim.x) {
         my_min = fminf(my_min, input[i]);
         my_max = fmaxf(my_max, input[i]);
     }
@@ -30,8 +64,9 @@ __global__ void minmax_kernel(const float* input, long long n, float* batch_min,
     }
 
     if (tid == 0) {
-        atomicMin(batch_min, s_min);
-        atomicMax(batch_max, s_max);
+        // [수정] 포인터가 아닌, 리덕션이 완료된 값을 전달
+        atomicMinFloat(batch_min, s_min);
+        atomicMaxFloat(batch_max, s_max);
     }
 }
 
@@ -74,6 +109,7 @@ void launch_observer_kernel(
 
     int threads_per_block = 256;
     int blocks_per_grid = min((int)((num_elements + threads_per_block - 1) / threads_per_block), 1024);
+    // min/max 두 배열을 위한 공유 메모리 크기
     size_t shared_mem_size = 2 * threads_per_block * sizeof(float);
 
     minmax_kernel<<<blocks_per_grid, threads_per_block, shared_mem_size, stream>>>(input, num_elements, d_batch_min, d_batch_max);

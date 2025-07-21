@@ -22,5 +22,4 @@ def get_library_path():
         raise FileNotFoundError(f"Could not find custom op library at {lib_path}")
     return str(lib_path)
 
-# C++에서 바인딩된 함수와 클래스를 임포트
 from.my_quant_lib import register_observer, get_observer_state, ObserverState

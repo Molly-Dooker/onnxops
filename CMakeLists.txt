@@ -37,7 +37,8 @@ setup_onnxruntime()
 
 # --- CUDA 설정 ---
 if(ENABLE_CUDA)
-    find_package(CUDAToolkit REQUIRED)
+    # 'cudart' 컴포넌트를 명시적으로 요청하여 CUDAToolkit::cudart 타겟 생성을 보장합니다.
+    find_package(CUDAToolkit REQUIRED COMPONENTS cudart)
     message(STATUS "Found CUDA Toolkit version ${CUDAToolkit_VERSION}")
     # 대상 GPU 아키텍처 설정 (필요에 따라 수정)
     set(CMAKE_CUDA_ARCHITECTURES 75 80 86)

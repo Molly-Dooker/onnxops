@@ -16,15 +16,12 @@ target_include_directories(my_quant_ops
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-# 라이브러리 링크
+# [수정된 부분] ONNXRuntime::onnxruntime을 PUBLIC으로 링크하여
+# 헤더 경로와 라이브러리 정보를 이 타겟을 링크하는 다른 타겟에게 전파합니다.
 target_link_libraries(my_quant_ops
     PUBLIC
         ONNXRuntime::onnxruntime
 )
-
-if(ENABLE_CUDA)
-    target_link_libraries(my_quant_ops PUBLIC CUDAToolkit::cudart)
-endif()
 
 # 출력 디렉토리 설정 (Python에서 찾기 쉽도록)
 set_target_properties(my_quant_ops PROPERTIES

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "onnxruntime_cxx_api.h"
-#include "cuda_provider_factory.h"
+// #include "cuda_provider_factory.h"  <-- [수정된 부분] 이 라인을 삭제합니다.
 #include <string>
 
 namespace MyQuantLib {
@@ -12,7 +12,7 @@ struct MovingAverageObserverKernel {
 
 private:
     float momentum_;
-    std::string id_; // 옵저버 식별자
+    std::string id_;
 };
 
 struct MovingAverageObserverCustomOp : Ort::CustomOpBase<MovingAverageObserverCustomOp, MovingAverageObserverKernel> {

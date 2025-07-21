@@ -1,7 +1,10 @@
 #pragma once
 
-#include <cuda_runtime.h>
 #include "state_manager.h"
+
+// cuda_runtime.h를 포함하는 대신 cudaStream_t를 전방 선언합니다.
+struct CUstream_st;
+typedef CUstream_st* cudaStream_t;
 
 void launch_observer_kernel(
     const float* input,
