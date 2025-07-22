@@ -1,1 +1,2 @@
-include python/my_quant_lib/*.so
+recursive-include python/my_quant_lib *.so
+include python/my_quant_lib/__init__.py

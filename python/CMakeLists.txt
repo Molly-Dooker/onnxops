@@ -20,6 +20,13 @@ target_link_libraries(my_quant_lib_python
         pybind11::pybind11
 )
 
+# 빌드 직후: my_quant_ops 공유 라이브러리를 extension 폴더로 복사
+add_custom_command(TARGET my_quant_lib_python POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:my_quant_ops>
+        $<TARGET_FILE_DIR:my_quant_lib_python>
+)
+
 # -----------------------------------------------------------------------------
 # Post-build: my_quant_ops 공유 라이브러리를 extension과 같은 폴더로 복사
 # -----------------------------------------------------------------------------

@@ -1,9 +1,9 @@
 import os
-import sys
+import platform
 import onnx
 import onnxruntime as ort
 import numpy as np
-
+import ipdb
 import my_quant_lib
 
 CUSTOM_OP_DOMAIN = 'com.my-quant-lib'
@@ -28,7 +28,9 @@ def create_test_model(observer_id, momentum=0.9):
     )
     model = onnx.helper.make_model(
         graph,
-        opset_imports=[onnx.helper.make_opsetid("", 15)]
+        opset_imports=[onnx.helper.make_opsetid("", 15),
+                       onnx.helper.make_opsetid(CUSTOM_OP_DOMAIN, 1)],
+        ir_version=10
     )
     onnx.save(model, MODEL_PATH)
 
@@ -38,22 +40,24 @@ def main():
         os.remove(MODEL_PATH)
     
     create_test_model(obs_id)
-
     # Observer 등록
     my_quant_lib.register_observer(obs_id)
 
     # SessionOptions + custom op 라이브러리 로드
     so = ort.SessionOptions()
-    lib_path = my_quant_lib.get_library_path()
+    pkg_dir = os.path.dirname(my_quant_lib.__file__)
+    lib_name = {
+        "Windows": "my_quant_ops.dll",
+        "Darwin":  "libmy_quant_ops.dylib"
+    }.get(platform.system(), "libmy_quant_ops.so")
+    lib_path = os.path.join(pkg_dir, lib_name)
     so.register_custom_ops_library(lib_path)
 
     # Providers 설정
-    providers = []
-    if 'CUDAExecutionProvider' in ort.get_available_providers():
-        providers.append('CUDAExecutionProvider')
-    providers.append('CPUExecutionProvider')
-
-    sess = ort.InferenceSession(MODEL_PATH, so, providers=providers)
+    providers = ['CUDAExecutionProvider']
+    ipdb.set_trace()
+    sess = ort.InferenceSession(MODEL_PATH, so)
+    sess.set_providers(providers)
 
     # 10회 inference 및 state 추적
     for i in range(10):
