@@ -1,0 +1,1 @@
+include python/my_quant_lib/*.so
