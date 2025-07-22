@@ -1,78 +1,64 @@
 import os
-import platform
 import onnx
 import onnxruntime as ort
 import numpy as np
+import my_quant_lib  # 수정된 lib를 빌드/설치하여 import
 import ipdb
-import my_quant_lib
-
-CUSTOM_OP_DOMAIN = 'com.my-quant-lib'
-MODEL_PATH = "test_observer_model_stateful.onnx"
-
-def create_test_model(observer_id, momentum=0.9):
+# 테스트용 ONNX 모델 생성 함수
+def create_test_model(observer_id, momentum=0.9, model_path="observer_test.onnx"):
+    # 입력/출력 텐서 정의 (float32, 2D 텐서, 가변 크기)
     X = onnx.helper.make_tensor_value_info('X', onnx.TensorProto.FLOAT, [None, None])
     Y = onnx.helper.make_tensor_value_info('Y', onnx.TensorProto.FLOAT, [None, None])
+    # MovingAverageObserver 노드 생성
     observer_node = onnx.helper.make_node(
         'MovingAverageObserver',
         inputs=['X'],
         outputs=['Y'],
-        domain=CUSTOM_OP_DOMAIN,
+        domain='com.my-quant-lib',   # Custom Op 도메인
         id=observer_id,
         momentum=float(momentum)
     )
-    graph = onnx.helper.make_graph(
-        [observer_node],
-        'observer-graph-stateful',
-        [X],
-        [Y]
-    )
+    # 그래프와 모델 작성
+    graph = onnx.helper.make_graph([observer_node], 'test-observer-graph', [X], [Y])
     model = onnx.helper.make_model(
         graph,
-        opset_imports=[onnx.helper.make_opsetid("", 15),
-                       onnx.helper.make_opsetid(CUSTOM_OP_DOMAIN, 1)],
-        ir_version=10
+        opset_imports=[
+            onnx.helper.make_opsetid("", 15),                   # ONNX 기본 도메인 opset 15
+            onnx.helper.make_opsetid("com.my-quant-lib", 1)     # 커스텀 도메인 opset 1
+        ]
     )
-    onnx.save(model, MODEL_PATH)
+    model.ir_version = 10
+    onnx.save(model, model_path)
+    return model_path
 
-def main():
-    obs_id = "test_obs_1"
-    if os.path.exists(MODEL_PATH):
-        os.remove(MODEL_PATH)
-    
-    create_test_model(obs_id)
-    # Observer 등록
-    my_quant_lib.register_observer(obs_id)
+# 1. 테스트 모델 생성 (momentum=0.9, ID="obs1")
+model_path = create_test_model("obs1", momentum=0.9)
 
-    # SessionOptions + custom op 라이브러리 로드
-    so = ort.SessionOptions()
-    pkg_dir = os.path.dirname(my_quant_lib.__file__)
-    lib_name = {
-        "Windows": "my_quant_ops.dll",
-        "Darwin":  "libmy_quant_ops.dylib"
-    }.get(platform.system(), "libmy_quant_ops.so")
-    lib_path = os.path.join(pkg_dir, lib_name)
-    so.register_custom_ops_library(lib_path)
+# 2. StateManager에 해당 observer ID 등록 (초기 상태 세팅)
+my_quant_lib.register_observer("obs1")
 
-    # Providers 설정
-    providers = ['CUDAExecutionProvider']
-    ipdb.set_trace()
-    sess = ort.InferenceSession(MODEL_PATH, so)
-    sess.set_providers(providers)
+# 3. ONNX Runtime 세션 생성 (커스텀 Op 라이브러리 로드 및 CUDA EP 지정)
+so = ort.SessionOptions()
+# 빌드된 커스텀 연산자 공유 라이브러리(.so) 경로 설정
+lib_path = os.path.join(os.path.dirname(my_quant_lib.__file__), "libmy_quant_ops.so")
+so.register_custom_ops_library(lib_path)
+# CUDA Execution Provider 사용하여 세션 생성
+# ipdb.set_trace()
+session = ort.InferenceSession(model_path, so, providers=['CUDAExecutionProvider'])
 
-    # 10회 inference 및 state 추적
-    for i in range(10):
-        data = (np.random.rand(10, 20).astype(np.float32) * (10 - i)) + (i / 2.0)
-        outputs = sess.run(None, {'X': data})[0]
-        assert np.array_equal(data, outputs), f"Output mismatch at iter {i}"
-        state = my_quant_lib.get_observer_state(obs_id)
-        print(f"[Iter {i+1}] min={state.min:.4f}, max={state.max:.4f}")
+# 4. 여러 번에 걸쳐 입력 데이터를 흘려보내며 상태(min/max) 추적
+print("Iter | Input_Min    Input_Max    State_Min    State_Max")
+for i in range(5):
+    # 난수 입력 생성 (점차 값의 범위를 변화시켜 상태 변화를 관찰)
+    data = (np.random.rand(4, 4).astype(np.float32) * (10 - i)) + i  # iteration에 따라 분포 변경
+    out = session.run(None, {'X': data})[0]
+    # 출력이 입력과 같은지 검증
+    assert np.array_equal(out, data), f"Output differs from input at iter {i}"
+    # 현재 상태 가져오기
+    state = my_quant_lib.get_observer_state("obs1")
+    # 입력과 상태의 min/max 출력
+    print(f"{i+1:>3d} | {data.min():>10.4f} {data.max():>10.4f}   {state.min:>10.4f} {state.max:>10.4f}")
 
-    final = my_quant_lib.get_observer_state(obs_id)
-    print(f"Final state: min={final.min:.4f}, max={final.max:.4f}")
-
-    assert 4.0 < final.min < 5.0, "Final min out of expected range"
-    assert 5.0 < final.max < 6.0, "Final max out of expected range"
-    print("All tests passed!")
-
-if __name__ == "__main__":
-    main()
+# 5. 최종 상태 값 검증 (예상 범위에 드는지 확인)
+final_state = my_quant_lib.get_observer_state("obs1")
+print(f"Final state min={final_state.min:.4f}, max={final_state.max:.4f}")

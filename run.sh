@@ -7,5 +7,5 @@ cmake ..
 make -j32
 cd ..
 python3 setup.py bdist_wheel
-pip uninstall my_quant_lib
+pip uninstall my_quant_lib -y
 pip install dist/my_quant_lib-0.1.0-py3-none-any.whl
