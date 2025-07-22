@@ -3,12 +3,12 @@ import sys
 import onnx
 import onnxruntime as ort
 import numpy as np
-
-# (1) 빌드된 파이썬 모듈 경로 추가
-#    -- CMake 출력 디렉토리 기준으로 경로를 맞춰주세요.
-module_dir = os.path.abspath(os.path.join(os.path.dirname(__file__),
-                                          "..", "build", "python", "my_quant_lib"))
-sys.path.insert(0, module_dir)
+import ipdb
+# # (1) 빌드된 파이썬 모듈 경로 추가
+# #    -- CMake 출력 디렉토리 기준으로 경로를 맞춰주세요.
+# module_dir = os.path.abspath(os.path.join(os.path.dirname(__file__),
+#                                           "..", "build", "python", "my_quant_lib"))
+# sys.path.insert(0, module_dir)
 
 import my_quant_lib
 
@@ -42,6 +42,7 @@ def main():
     obs_id = "test_obs_1"
     if os.path.exists(MODEL_PATH):
         os.remove(MODEL_PATH)
+    
     create_test_model(obs_id)
 
     # Observer 등록
