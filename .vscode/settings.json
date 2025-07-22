@@ -4,12 +4,15 @@
 
   // CMake 구성(Configure) 시 전달할 인자들
   "cmake.configureArgs": [
-    "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+    "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+    "-DCMAKE_BUILD_TYPE=Release"      // ← 여기에 Release 지정
   ],
 
-  // CMake 빌드(Build) 시 전달할 인자들 (make -j8)
+  // CMake 빌드(Build) 시 전달할 인자들 (make -j32)
   "cmake.buildArgs": [
     "-j32"
   ],
 
+  // (선택) CMake Tools 기본 빌드 타입을 Release로 설정
+  "cmake.buildType": "Release"
 }
