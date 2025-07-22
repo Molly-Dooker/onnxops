@@ -3,12 +3,13 @@ import onnx
 import onnxruntime as ort
 import numpy as np
 import my_quant_lib  # 수정된 lib를 빌드/설치하여 import
+from numpy.random import default_rng
 import ipdb
 # 테스트용 ONNX 모델 생성 함수
-def create_test_model(observer_id, momentum=0.9, model_path="observer_test.onnx"):
+def create_test_model(observer_id, momentum=0.9, dimension=4 ,model_path="observer_test.onnx"):
     # 입력/출력 텐서 정의 (float32, 2D 텐서, 가변 크기)
-    X = onnx.helper.make_tensor_value_info('X', onnx.TensorProto.FLOAT, [None, None])
-    Y = onnx.helper.make_tensor_value_info('Y', onnx.TensorProto.FLOAT, [None, None])
+    X = onnx.helper.make_tensor_value_info('X', onnx.TensorProto.FLOAT, [None]*dimension)
+    Y = onnx.helper.make_tensor_value_info('Y', onnx.TensorProto.FLOAT, [None]*dimension)
     # MovingAverageObserver 노드 생성
     observer_node = onnx.helper.make_node(
         'MovingAverageObserver',
@@ -25,9 +26,10 @@ def create_test_model(observer_id, momentum=0.9, model_path="observer_test.onnx"
         opset_imports=[
             onnx.helper.make_opsetid("", 15),                   # ONNX 기본 도메인 opset 15
             onnx.helper.make_opsetid("com.my-quant-lib", 1)     # 커스텀 도메인 opset 1
-        ]
+        ],
+        ir_version=10
     )
-    model.ir_version = 10
+    # model.ir_version = 10
     onnx.save(model, model_path)
     return model_path
 
@@ -48,17 +50,22 @@ session = ort.InferenceSession(model_path, so, providers=['CUDAExecutionProvider
 
 # 4. 여러 번에 걸쳐 입력 데이터를 흘려보내며 상태(min/max) 추적
 print("Iter | Input_Min    Input_Max    State_Min    State_Max")
-for i in range(5):
+min_= None; max_= None;
+for i in range(100):
     # 난수 입력 생성 (점차 값의 범위를 변화시켜 상태 변화를 관찰)
-    data = (np.random.rand(4, 4).astype(np.float32) * (10 - i)) + i  # iteration에 따라 분포 변경
+    data = (default_rng().random((512,3,128,128), dtype=np.float32) * (10 - i)) + i  # iteration에 따라 분포 변경
+    # data =np.random.rand(512,1204).astype(np.float32)
     out = session.run(None, {'X': data})[0]
     # 출력이 입력과 같은지 검증
     assert np.array_equal(out, data), f"Output differs from input at iter {i}"
     # 현재 상태 가져오기
     state = my_quant_lib.get_observer_state("obs1")
     # 입력과 상태의 min/max 출력
-    print(f"{i+1:>3d} | {data.min():>10.4f} {data.max():>10.4f}   {state.min:>10.4f} {state.max:>10.4f}")
-
-# 5. 최종 상태 값 검증 (예상 범위에 드는지 확인)
-final_state = my_quant_lib.get_observer_state("obs1")
-print(f"Final state min={final_state.min:.4f}, max={final_state.max:.4f}")
+    if min_ is None:
+        min_ = data.min(); max_ = data.max()
+    else:
+        min_ = min_*0.9+ data.min()*0.1; max_ = max_*0.9+ data.max()*0.1; 
+    
+    print(f'max:{max_:4.10f}, {state.max:4.10f}')
+    print(f'min:{min_:4.10f}, {state.min:4.10f}')
+    print("-------------------------------------------------")
