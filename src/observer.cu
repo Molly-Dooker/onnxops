@@ -1,3 +1,5 @@
+// src/observer.cpp
+
 #include "observer.h"
 #include "observer_kernel.cuh"
 #include "state_manager.h"
@@ -164,12 +166,14 @@ void HistogramObserverKernel_CPU::Compute(OrtKernelContext* context) {
   for (int64_t i = 0; i < N; ++i) {
     int64_t idx;
     if (range > 0.f) {
+      // 일반 분포일 때
       idx = static_cast<int64_t>((X[i] - min_val) / bin_width);
-      if (idx == bins_) idx = bins_ - 1;
+      if (idx < 0)        idx = 0;
+      else if (idx >= bins_) idx = bins_ - 1;
     } else {
-      // min == max 일 때 “가운데” bin
+      // min == max 인 경우 → 가운데 bin
       idx = bins_ / 2;
-    if (idx == bins_) idx = bins_ - 1;
+    }
     hist_data[idx]++;
   }
 

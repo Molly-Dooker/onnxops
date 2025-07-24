@@ -17,13 +17,14 @@ __global__ void HistKernel(const float* __restrict__ X,
   int idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx >= N) return;
   float v = X[idx];
-  int64_t b = 0;
+  int64_t b;
   if (bin_width > 0.f) {
     b = static_cast<int64_t>((v - min_val) / bin_width);
-    if (b < 0) b = 0;
+    if (b < 0)        b = 0;
     else if (b >= bins) b = bins - 1;
+  } else {
+    b = bins / 2;
   }
-  // int64_t → unsigned long long 로 캐스트
   atomicAdd(reinterpret_cast<unsigned long long*>(&H[b]), 1ULL);
 }
 

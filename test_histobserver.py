@@ -62,8 +62,6 @@ if __name__ == "__main__":
     lib_path = os.path.join(os.path.dirname(my_quant_lib.__file__), "libmy_quant_ops.so")
     so.register_custom_ops_library(lib_path)
     sess = ort.InferenceSession(model_path, so, providers=["CUDAExecutionProvider"])
-
-    from torch.ao.quantization import HistogramObserver
     for i in range(100):
         # 난수 입력 생성 (점차 값의 범위를 변화시켜 상태 변화를 관찰)
         data = (default_rng().random((512,3,128,128), dtype=np.float32) * (10 - i)) + i  # iteration에 따라 분포 변경
@@ -86,14 +84,5 @@ if __name__ == "__main__":
         l1_err        = diff.sum()
         percent_err   = (l1_err / data.size) * 100
         state = my_quant_lib.get_observer_state(OBS_ID)
-        print(f"전체 샘플 대비 누적 오차: {percent_err:.6f}%   max diff : {abs(state.max-max_val)}, min diff : {abs(state.min-min_val)}")
-
-        import torch
-        new_histogram = torch.histc(torch.tensor(data), BINS, min=min_val, max=max_val) 
-
-
-
-
-
-            
+        print(f"전체 샘플 대비 누적 오차: {percent_err:.6f}%   max diff : {abs(state.max-max_val)}, min diff : {abs(state.min-min_val)}") 
 
