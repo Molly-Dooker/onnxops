@@ -77,7 +77,18 @@ if __name__ == "__main__":
         stored_hist = np.array(my_quant_lib.get_histogram(OBS_ID))
         diff = np.abs(stored_hist - expected_hist)
         l1_err        = diff.sum()
-        percent_err   = (l1_err / data.size) * 100
+        percent_err = l1_err / expected_hist.sum() * 100
         state = my_quant_lib.get_observer_state(OBS_ID)
-        print(f"전체 샘플 대비 누적 오차: {percent_err:.6f}%   max diff : {abs(state.max-max_val)}, min diff : {abs(state.min-min_val)}") 
+
+
+        abs_max_err = abs(state.max - max_val)
+        abs_min_err = abs(state.min - min_val)
+        rel_max_err = abs_max_err / (abs(max_val) + 1e-12) * 100  # %
+        rel_min_err = abs_min_err / (abs(min_val) + 1e-12) * 100  # %
+
+        print(
+            f"hist: {percent_err:.6f}%  | "
+            f"Max val: {rel_max_err:.4f}% | "
+            f"Min val: {rel_min_err:.4f}%"
+        )
 

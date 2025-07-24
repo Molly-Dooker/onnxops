@@ -66,6 +66,11 @@ for i in range(100):
     else:
         min_ = min_*0.9+ data.min()*0.1; max_ = max_*0.9+ data.max()*0.1; 
     
-    print(f'max:{max_:4.10f}, {state.max:4.10f}')
-    print(f'min:{min_:4.10f}, {state.min:4.10f}')
-    print("-------------------------------------------------")
+
+    abs_err_max = abs(state.max - max_)
+    abs_err_min = abs(state.min - min_)
+    rel_err_max = abs_err_max / (abs(max_) + 1e-12) * 100  # %
+    rel_err_min = abs_err_min / (abs(min_) + 1e-12) * 100  # %
+    print(f"Iter {i:3d} | "
+          f"Max Err: ({rel_err_max:.4f}%) | "
+          f"Min Err: ({rel_err_min:.4f}%)")
