@@ -65,13 +65,8 @@ if __name__ == "__main__":
     for i in range(100):
         # 난수 입력 생성 (점차 값의 범위를 변화시켜 상태 변화를 관찰)
         data = (default_rng().random((512,3,128,128), dtype=np.float32) * (10 - i)) + i  # iteration에 따라 분포 변경
-        # data =np.random.rand(512,1204).astype(np.float32)
         (identity,) = sess.run(None, {'X': data})
-        # 5. verify identity output equals input
         assert np.array_equal(identity, data), "Identity output does not match input!"
-
-        # 6. compute expected histogram via numpy
-        # use same min/max as computed in the node
         min_val, max_val = data.min(), data.max()
         expected_hist, _ = np.histogram(
             data.flatten(),
