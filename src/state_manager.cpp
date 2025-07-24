@@ -9,11 +9,19 @@ StateManager& StateManager::get_instance() {
     return instance;
 }
 
-void StateManager::register_observer(const std::string& id) {
+void StateManager::register_moving_average(const std::string& id) {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (state_map_.find(id) == state_map_.end()) {
-        // 초기 상태: min을 +∞, max를 -∞로 설정
-        state_map_[id] = {std::numeric_limits<float>::max(), std::numeric_limits<float>::lowest()};
+    if (!state_map_.count(id)) {
+        state_map_.emplace(id,
+            ObserverState(std::numeric_limits<float>::max(),
+                          std::numeric_limits<float>::lowest()));
+    }
+}
+
+void StateManager::register_histogram(const std::string& id, int64_t bins) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!state_map_.count(id)) {
+        state_map_.emplace(id, ObserverState(bins));
     }
 }
 
@@ -23,7 +31,7 @@ ObserverState StateManager::get_state(const std::string& id) {
     if (it == state_map_.end()) {
         throw std::runtime_error("Observer with id '" + id + "' not found.");
     }
-    return it->second; // 구조체 복사 반환
+    return it->second;
 }
 
 ObserverState* StateManager::get_state_ptr(const std::string& id) {
@@ -32,7 +40,7 @@ ObserverState* StateManager::get_state_ptr(const std::string& id) {
     if (it == state_map_.end()) {
         throw std::runtime_error("Attempted to access unregistered observer '" + id + "'.");
     }
-    return &(it->second);
+    return &it->second;
 }
 
-} // namespace MyQuantLib
+}  // namespace MyQuantLib

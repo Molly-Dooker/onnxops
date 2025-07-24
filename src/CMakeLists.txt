@@ -4,6 +4,7 @@ add_library(my_quant_ops SHARED)
 # 소스 파일 지정
 target_sources(my_quant_ops
     PRIVATE
+        histogram_kernel.cu
         state_manager.cpp
         observer.cpp
         observer_kernel.cu
