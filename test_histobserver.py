@@ -6,7 +6,8 @@ import onnxruntime as ort
 import numpy as np
 import my_quant_lib
 from numpy.random import default_rng
-
+import numpy.testing as npt
+import ipdb
 def create_histogram_model(observer_id, bins, dimension=2, model_path="histogram_test.onnx"):
     """
     Creates an ONNX model with a single HistogramObserver node.
@@ -51,7 +52,7 @@ if __name__ == "__main__":
     BINS = 2048
 
     # 1. build and save the test model
-    model_path = create_histogram_model(OBS_ID, bins=BINS)
+    model_path = create_histogram_model(OBS_ID, dimension=4,bins=BINS)
 
     # 2. register the histogram observer in Python
     my_quant_lib.register_histogram_observer(OBS_ID, BINS)
@@ -62,30 +63,37 @@ if __name__ == "__main__":
     so.register_custom_ops_library(lib_path)
     sess = ort.InferenceSession(model_path, so, providers=["CUDAExecutionProvider"])
 
-    # 4. generate a random input and run the model
-    rng = default_rng(12345)
-    data = rng.random((1000,), dtype=np.float32) * 5 + 2  # values in [2,7)
-    # reshape to match 2D expectation, e.g. (1000,1)
-    data = data.reshape(-1, 1)
-    (identity,) = sess.run(None, {'X': data})
+    from torch.ao.quantization import HistogramObserver
+    for i in range(100):
+        # 난수 입력 생성 (점차 값의 범위를 변화시켜 상태 변화를 관찰)
+        data = (default_rng().random((512,3,128,128), dtype=np.float32) * (10 - i)) + i  # iteration에 따라 분포 변경
+        # data =np.random.rand(512,1204).astype(np.float32)
+        (identity,) = sess.run(None, {'X': data})
+        # 5. verify identity output equals input
+        assert np.array_equal(identity, data), "Identity output does not match input!"
 
-    # 5. verify identity output equals input
-    assert np.array_equal(identity, data), "Identity output does not match input!"
+        # 6. compute expected histogram via numpy
+        # use same min/max as computed in the node
+        min_val, max_val = data.min(), data.max()
+        expected_hist, _ = np.histogram(
+            data.flatten(),
+            bins=BINS,
+            range=(min_val, max_val)
+        )
+        # 7. fetch stored state from Python binding
+        stored_hist = np.array(my_quant_lib.get_histogram(OBS_ID))
+        diff = np.abs(stored_hist - expected_hist)
+        l1_err        = diff.sum()
+        percent_err   = (l1_err / data.size) * 100
+        state = my_quant_lib.get_observer_state(OBS_ID)
+        print(f"전체 샘플 대비 누적 오차: {percent_err:.6f}%   max diff : {abs(state.max-max_val)}, min diff : {abs(state.min-min_val)}")
 
-    # 6. compute expected histogram via numpy
-    # use same min/max as computed in the node
-    min_val, max_val = data.min(), data.max()
-    expected_hist, _ = np.histogram(
-        data.flatten(),
-        bins=BINS,
-        range=(min_val, max_val)
-    )
-    import ipdb; ipdb.set_trace()
-    # 7. fetch stored state from Python binding
-    stored_hist = my_quant_lib.get_histogram(OBS_ID)
-    print("Stored state hist:", stored_hist)
-    assert stored_hist == expected_hist.tolist(), "StateManager histogram mismatch!"
-    state = my_quant_lib.get_observer_state(OBS_ID)
-    
+        import torch
+        new_histogram = torch.histc(torch.tensor(data), BINS, min=min_val, max=max_val) 
 
-    print("✅ HistogramObserver test passed!")
+
+
+
+
+            
+

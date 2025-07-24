@@ -1,5 +1,3 @@
-// src/observer.cpp
-
 #include "observer.h"
 #include "observer_kernel.cuh"
 #include "state_manager.h"
@@ -8,6 +6,9 @@
 #include <algorithm>
 #include <limits>
 #include <vector>
+#include <thrust/device_ptr.h>
+#include <thrust/extrema.h>
+#include <thrust/system/cuda/execution_policy.h>  // ← CUDA 실행 정책 헤더
 namespace MyQuantLib {
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -161,9 +162,13 @@ void HistogramObserverKernel_CPU::Compute(OrtKernelContext* context) {
   // 2) histogram 카운트
   std::vector<int64_t> hist_data(bins_, 0);
   for (int64_t i = 0; i < N; ++i) {
-    int64_t idx = (range > 0.f)
-                      ? static_cast<int64_t>((X[i] - min_val) / bin_width)
-                      : 0;
+    int64_t idx;
+    if (range > 0.f) {
+      idx = static_cast<int64_t>((X[i] - min_val) / bin_width);
+      if (idx == bins_) idx = bins_ - 1;
+    } else {
+      // min == max 일 때 “가운데” bin
+      idx = bins_ / 2;
     if (idx == bins_) idx = bins_ - 1;
     hist_data[idx]++;
   }
@@ -222,6 +227,28 @@ void HistogramObserverKernel_CUDA::Compute(OrtKernelContext* context) {
 	// (필요시) 스트림 동기화: 
 	cuStreamSynchronize(stream);
 
+
+  thrust::device_ptr<const float> devX(const_cast<float*>(X));
+  auto policy = thrust::cuda::par.on(stream);
+
+  // compute min
+  auto min_it = thrust::min_element(policy, devX, devX + N);
+  // compute max
+  auto max_it = thrust::max_element(policy, devX, devX + N);
+
+  float min_val=0, max_val=0;
+  cudaMemcpyAsync(&min_val,
+                  thrust::raw_pointer_cast(min_it),
+                  sizeof(float),
+                  cudaMemcpyDeviceToHost,
+                  stream);
+  cudaMemcpyAsync(&max_val,
+                  thrust::raw_pointer_cast(max_it),
+                  sizeof(float),
+                  cudaMemcpyDeviceToHost,
+                  stream);
+  cuStreamSynchronize(stream);
+
 	// 3) GPU→Host 복사
 	std::vector<int64_t> hist_data(bins_);
 	cuMemcpyDtoH(hist_data.data(), dH, bins_ * sizeof(int64_t));
@@ -230,10 +257,8 @@ void HistogramObserverKernel_CUDA::Compute(OrtKernelContext* context) {
 	// 4) StateManager에 기록
 	ObserverState* st = StateManager::get_instance().get_state_ptr(id_);
 	st->hist    = std::move(hist_data);
-	st->min = *std::min_element(st->hist.begin(), st->hist.end());
-	st->max = *std::max_element(st->hist.begin(), st->hist.end());
-
-
+	st->min = min_val;
+	st->max = max_val;
 }
 
 }  // namespace MyQuantLib
