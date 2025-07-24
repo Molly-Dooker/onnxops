@@ -87,6 +87,7 @@ if __name__ == "__main__":
         rel_min_err = abs_min_err / (abs(min_val) + 1e-12) * 100  # %
 
         print(
+            f"Iter {i:3d} | "
             f"hist: {percent_err:.6f}%  | "
             f"Max val: {rel_max_err:.4f}% | "
             f"Min val: {rel_min_err:.4f}%"
