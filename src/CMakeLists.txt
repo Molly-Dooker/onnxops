@@ -11,10 +11,19 @@ target_sources(my_quant_ops
         custom_op_library.cpp
 )
 
+# # 헤더 파일 경로 포함
+# target_include_directories(my_quant_ops
+#     PUBLIC
+#         ${CMAKE_CURRENT_SOURCE_DIR}
+# )
+
+
 # 헤더 파일 경로 포함
 target_include_directories(my_quant_ops
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
+    # CUDA 헤더 (ENABLE_CUDA=ON일 때만 추가)
+    $<$<BOOL:${ENABLE_CUDA}>:${CUDAToolkit_INCLUDE_DIRS}>
 )
 
 # [수정된 부분] ONNXRuntime::onnxruntime을 PUBLIC으로 링크하여
@@ -22,6 +31,10 @@ target_include_directories(my_quant_ops
 target_link_libraries(my_quant_ops
     PUBLIC
         ONNXRuntime::onnxruntime
+    # CUDA 런타임 & 드라이버 API (ENABLE_CUDA=ON일 때만 링크)
+    PRIVATE
+        $<$<BOOL:${ENABLE_CUDA}>:CUDA::cudart>
+        $<$<BOOL:${ENABLE_CUDA}>:CUDA::cuda_driver>
 )
 
 # 출력 디렉토리 설정 (Python에서 찾기 쉽도록)

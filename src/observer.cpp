@@ -4,11 +4,10 @@
 #include "observer_kernel.cuh"
 #include "state_manager.h"
 #include "histogram_kernel.cuh"
-
+#include <cuda.h>  
 #include <algorithm>
 #include <limits>
 #include <vector>
-
 namespace MyQuantLib {
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -169,19 +168,16 @@ void HistogramObserverKernel_CPU::Compute(OrtKernelContext* context) {
     hist_data[idx]++;
   }
 
-  // output0: histogram
-  auto out0 = ctx.GetOutput(0, &bins_, 1);
-  int64_t* H    = out0.GetTensorMutableData<int64_t>();
-  std::copy(hist_data.begin(), hist_data.end(), H);
-
-  // output1: identity
-  auto out1 = ctx.GetOutput(1, shape.data(), shape.size());
-  float*   Y    = out1.GetTensorMutableData<float>();
+  // ─── output: identity only ────────────────────────────────────────────
+  auto out = ctx.GetOutput(0, shape.data(), shape.size());
+  float* Y = out.GetTensorMutableData<float>();
   std::copy(X, X + N, Y);
 
-  // 상태 매니저에 복사
+  // ─── StateManager에 히스토그램·min/max 기록 ────────────────────────────
   ObserverState* st = StateManager::get_instance().get_state_ptr(id_);
-  st->hist = hist_data;
+  st->hist    = std::move(hist_data);
+  st->min = min_val;
+  st->max = max_val;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -196,26 +192,48 @@ HistogramObserverKernel_CUDA::HistogramObserverKernel_CUDA(
 }
 
 void HistogramObserverKernel_CUDA::Compute(OrtKernelContext* context) {
-  Ort::KernelContext ctx(context);
+	Ort::KernelContext ctx(context);
 
-  auto input     = ctx.GetInput(0);
-  auto info      = input.GetTensorTypeAndShapeInfo();
-  auto shape     = info.GetShape();
-  int64_t N      = info.GetElementCount();
-  const float* X = input.GetTensorData<float>();
+	auto input     = ctx.GetInput(0);
+	auto info      = input.GetTensorTypeAndShapeInfo();
+	auto shape     = info.GetShape();
+	int64_t N      = info.GetElementCount();
+	const float* X = input.GetTensorData<float>();
 
-  // GPU 스트림 forward-declared in observer_kernel.cuh
-  cudaStream_t stream =
-      reinterpret_cast<cudaStream_t>(ctx.GetGPUComputeStream());
+	// GPU 스트림 forward-declared in observer_kernel.cuh
+	CUstream stream = reinterpret_cast<CUstream>(ctx.GetGPUComputeStream());
 
-  // output 준비
-  auto out0 = ctx.GetOutput(0, &bins_, 1);
-  auto out1 = ctx.GetOutput(1, shape.data(), shape.size());
-  int64_t*    H = out0.GetTensorMutableData<int64_t>();
-  float*      Y = out1.GetTensorMutableData<float>();
 
-  // CUDA histogram + identity 실행
-  launch_histogram_cuda(X, H, Y, N, bins_, stream);
+	// ─── output: identity only ────────────────────────────────────────────
+	auto out = ctx.GetOutput(0, shape.data(), shape.size());
+	float* Y = out.GetTensorMutableData<float>();
+
+	// 1) GPU 상에 임시 히스토그램 버퍼 할당
+	CUdeviceptr dH = 0;
+	cuMemAlloc(&dH, bins_ * sizeof(int64_t));
+
+	// 2) 히스토그램 계산 + identity 복사
+	launch_histogram_cuda(X,
+		reinterpret_cast<int64_t*>(dH),
+		Y,
+		N,
+		bins_,
+		stream);
+	// (필요시) 스트림 동기화: 
+	cuStreamSynchronize(stream);
+
+	// 3) GPU→Host 복사
+	std::vector<int64_t> hist_data(bins_);
+	cuMemcpyDtoH(hist_data.data(), dH, bins_ * sizeof(int64_t));
+	cuMemFree(dH);
+
+	// 4) StateManager에 기록
+	ObserverState* st = StateManager::get_instance().get_state_ptr(id_);
+	st->hist    = std::move(hist_data);
+	st->min = *std::min_element(st->hist.begin(), st->hist.end());
+	st->max = *std::max_element(st->hist.begin(), st->hist.end());
+
+
 }
 
 }  // namespace MyQuantLib

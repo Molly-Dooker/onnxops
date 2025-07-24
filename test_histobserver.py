@@ -17,13 +17,13 @@ def create_histogram_model(observer_id, bins, dimension=2, model_path="histogram
     # make shape [None, None, ...] of length `dimension`
     shape = [None] * dimension
     X = onnx.helper.make_tensor_value_info('X', onnx.TensorProto.FLOAT, shape)
-    H = onnx.helper.make_tensor_value_info('H', onnx.TensorProto.INT64, [bins])
+    # H = onnx.helper.make_tensor_value_info('H', onnx.TensorProto.INT64, [bins])
     Y = onnx.helper.make_tensor_value_info('Y', onnx.TensorProto.FLOAT, shape)
 
     node = onnx.helper.make_node(
         'HistogramObserver',
         inputs=['X'],
-        outputs=['H', 'Y'],
+        outputs=['Y'],
         domain='com.my-quant-lib',
         id=observer_id,
         bins=bins
@@ -33,7 +33,7 @@ def create_histogram_model(observer_id, bins, dimension=2, model_path="histogram
         [node],
         'histogram-observer-graph',
         [X],
-        [H, Y]
+        [Y]
     )
     model = onnx.helper.make_model(
         graph,
@@ -60,15 +60,14 @@ if __name__ == "__main__":
     so = ort.SessionOptions()
     lib_path = os.path.join(os.path.dirname(my_quant_lib.__file__), "libmy_quant_ops.so")
     so.register_custom_ops_library(lib_path)
-    sess = ort.InferenceSession(model_path, so, providers=["CPUExecutionProvider"])
+    sess = ort.InferenceSession(model_path, so, providers=["CUDAExecutionProvider"])
 
     # 4. generate a random input and run the model
     rng = default_rng(12345)
     data = rng.random((1000,), dtype=np.float32) * 5 + 2  # values in [2,7)
     # reshape to match 2D expectation, e.g. (1000,1)
     data = data.reshape(-1, 1)
-
-    hist_out, identity = sess.run(None, {'X': data})
+    (identity,) = sess.run(None, {'X': data})
 
     # 5. verify identity output equals input
     assert np.array_equal(identity, data), "Identity output does not match input!"
@@ -81,14 +80,12 @@ if __name__ == "__main__":
         bins=BINS,
         range=(min_val, max_val)
     )
-
-    print("ONNX histogram:", hist_out.tolist())
-    print("Expected hist :", expected_hist.tolist())
-    assert np.array_equal(hist_out, expected_hist), "Histogram mismatch!"
-
+    import ipdb; ipdb.set_trace()
     # 7. fetch stored state from Python binding
     stored_hist = my_quant_lib.get_histogram(OBS_ID)
     print("Stored state hist:", stored_hist)
     assert stored_hist == expected_hist.tolist(), "StateManager histogram mismatch!"
+    state = my_quant_lib.get_observer_state(OBS_ID)
+    
 
     print("✅ HistogramObserver test passed!")

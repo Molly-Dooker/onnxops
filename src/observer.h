@@ -81,10 +81,9 @@ struct HistogramObserverOp_CPU
   const char* GetExecutionProviderType() const { return "CPUExecutionProvider"; }
   size_t GetInputTypeCount() const { return 1; }
   ONNXTensorElementDataType GetInputType(size_t) const { return ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT; }
-  size_t GetOutputTypeCount() const { return 2; }
-  ONNXTensorElementDataType GetOutputType(size_t index) const {
-    return index == 0 ? ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64
-                      : ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT;
+  size_t GetOutputTypeCount() const noexcept { return 1; }
+  ONNXTensorElementDataType GetOutputType(size_t /*index*/) const noexcept  {
+    return ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT;  // 항상 identity
   }
 };
 
@@ -98,10 +97,9 @@ struct HistogramObserverOp_CUDA
   const char* GetExecutionProviderType() const { return "CUDAExecutionProvider"; }
   size_t GetInputTypeCount() const { return 1; }
   ONNXTensorElementDataType GetInputType(size_t) const { return ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT; }
-  size_t GetOutputTypeCount() const { return 2; }
-  ONNXTensorElementDataType GetOutputType(size_t index) const {
-    return index == 0 ? ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64
-                      : ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT;
+  size_t GetOutputTypeCount() const noexcept  { return 1; }
+  ONNXTensorElementDataType GetOutputType(size_t /*index*/) const noexcept  {
+    return ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT;
   }
 };
 
