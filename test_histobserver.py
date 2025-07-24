@@ -60,7 +60,7 @@ if __name__ == "__main__":
     so = ort.SessionOptions()
     lib_path = os.path.join(os.path.dirname(my_quant_lib.__file__), "libmy_quant_ops.so")
     so.register_custom_ops_library(lib_path)
-    sess = ort.InferenceSession(model_path, so, providers=["CUDAExecutionProvider"])
+    sess = ort.InferenceSession(model_path, so, providers=["CPUExecutionProvider"])
 
     # 4. generate a random input and run the model
     rng = default_rng(12345)
