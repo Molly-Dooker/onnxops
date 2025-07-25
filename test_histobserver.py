@@ -50,20 +50,13 @@ def create_histogram_model(observer_id, bins, dimension=2, model_path="histogram
 if __name__ == "__main__":
     OBS_ID = "hist1"
     BINS = 2048
-
-    # 1. build and save the test model
     model_path = create_histogram_model(OBS_ID, dimension=4,bins=BINS)
-
-    # 2. register the histogram observer in Python
     my_quant_lib.register_histogram_observer(OBS_ID, BINS)
-
-    # 3. create ONNX Runtime session (CPU EP to ensure state update)
     so = ort.SessionOptions()
     lib_path = os.path.join(os.path.dirname(my_quant_lib.__file__), "libmy_quant_ops.so")
     so.register_custom_ops_library(lib_path)
     sess = ort.InferenceSession(model_path, so, providers=["CUDAExecutionProvider"])
     for i in range(100):
-        # 난수 입력 생성 (점차 값의 범위를 변화시켜 상태 변화를 관찰)
         data = (default_rng().random((512,3,128,128), dtype=np.float32) * (10 - i)) + i  # iteration에 따라 분포 변경
         (identity,) = sess.run(None, {'X': data})
         assert np.array_equal(identity, data), "Identity output does not match input!"
@@ -73,19 +66,15 @@ if __name__ == "__main__":
             bins=BINS,
             range=(min_val, max_val)
         )
-        # 7. fetch stored state from Python binding
         stored_hist = np.array(my_quant_lib.get_histogram(OBS_ID))
         diff = np.abs(stored_hist - expected_hist)
         l1_err        = diff.sum()
         percent_err = l1_err / expected_hist.sum() * 100
         state = my_quant_lib.get_observer_state(OBS_ID)
-
-
         abs_max_err = abs(state.max - max_val)
         abs_min_err = abs(state.min - min_val)
         rel_max_err = abs_max_err / (abs(max_val) + 1e-12) * 100  # %
         rel_min_err = abs_min_err / (abs(min_val) + 1e-12) * 100  # %
-
         print(
             f"Iter {i:3d} | "
             f"hist: {percent_err:.6f}%  | "
