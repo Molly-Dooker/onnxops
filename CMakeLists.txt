@@ -6,6 +6,10 @@ project(MyQuantLib LANGUAGES CXX CUDA)
 
 # 모듈 경로 추가
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+# CMAKE_SOURCE_DIR : 최상단 위치
+# CMAKE_CURRENT_SOURCE_DIR : 현재 위치
+# CMAKE_CURRENT_LIST_DIR : 현재 cmakelist 읽는 위치
+
 
 # 의존성 처리 모듈 포함
 include(PreparePyBind11)
