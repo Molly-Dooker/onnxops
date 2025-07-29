@@ -35,8 +35,8 @@ struct ObserverState {
 
     // Histogram 전용 생성자
     ObserverState(int64_t bins_)
-        : min(std::numeric_limits<float>::max()),
-          max(std::numeric_limits<float>::lowest()),
+        : min(std::numeric_limits<float>::infinity()),
+          max(-std::numeric_limits<float>::infinity()),
           bins(bins_),
           hist(bins_, 0),
           device_hist_buffer(nullptr)

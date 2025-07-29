@@ -4,7 +4,7 @@ import onnxruntime as ort
 import numpy as np
 import my_quant_lib
 from numpy.random import default_rng
-
+from torch.ao.quantization import HistogramObserver
 def create_test_model(observer_id, momentum=0.9, dimension=4 ,model_path="observer_test.onnx"):
     X = onnx.helper.make_tensor_value_info('X', onnx.TensorProto.FLOAT, [None]*dimension)
     Y = onnx.helper.make_tensor_value_info('Y', onnx.TensorProto.FLOAT, [None]*dimension)

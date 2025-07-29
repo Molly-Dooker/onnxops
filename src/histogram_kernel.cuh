@@ -23,4 +23,6 @@ void launch_histogram_cuda(const float* X,
                            float* Y,
                            int64_t N,
                            int64_t bins,
+                           float min_val,       // min_val 인자 추가
+                           float max_val,       // max_val 인자 추가
                            cudaStream_t stream);

@@ -43,24 +43,22 @@ void launch_histogram_cuda(const float* X,
                            float* Y,
                            int64_t N,
                            int64_t bins,
+                           float min_val,       // 인자로 받은 min_val
+                           float max_val,       // 인자로 받은 max_val
                            cudaStream_t stream) {
-  // 1) find min/max via thrust
-  thrust::device_ptr<const float> dptr(X);
-  auto mm = thrust::minmax_element(thrust::cuda::par.on(stream), dptr, dptr + N);
-  float min_val = *mm.first;
-  float max_val = *mm.second;
+  // 1) min/max 계산 로직 제거하고, 전달받은 값으로 bin_width 계산
   float range = max_val - min_val;
-  float bin_width = (bins > 0) ? (range / static_cast<float>(bins)) : 0.f;
+  float bin_width = (bins > 0 && range > 0) ? (range / static_cast<float>(bins)) : 0.f;
 
-  // 2) zero histogram
+  // 2) 히스토그램 버퍼 초기화
   cudaMemsetAsync(H, 0, bins * sizeof(int64_t), stream);
 
-  // 3) launch HistKernel and IdentityKernel
+  // 3) HistKernel 및 IdentityKernel 실행
   int threads = 256;
   int blocks = static_cast<int>((N + threads - 1) / threads);
   HistKernel<<<blocks, threads, 0, stream>>>(X, H, N, min_val, bin_width, bins);
   IdentityKernel<<<blocks, threads, 0, stream>>>(X, Y, N);
 
-  // 4) (필요시) 스트림 동기화
+  // 4) 스트림 동기화는 호출하는 쪽에서 관리하므로 여기서 제거해도 무방
   cudaStreamSynchronize(stream);
 }

@@ -56,11 +56,14 @@ if __name__ == "__main__":
     lib_path = os.path.join(os.path.dirname(my_quant_lib.__file__), "libmy_quant_ops.so")
     so.register_custom_ops_library(lib_path)
     sess = ort.InferenceSession(model_path, so, providers=["CUDAExecutionProvider"])
+    # ipdb.set_trace()
+    min_val = np.inf; max_val = -np.inf
     for i in range(100):
-        data = (default_rng().random((512,3,128,128), dtype=np.float32) * (10 - i)) + i  # iteration에 따라 분포 변경
+        data = (default_rng().random((512,3,128,128), dtype=np.float32) * 6.0) - 3.0# iteration에 따라 분포 변경
         (identity,) = sess.run(None, {'X': data})
         assert np.array_equal(identity, data), "Identity output does not match input!"
-        min_val, max_val = data.min(), data.max()
+        current_min, current_max = data.min(), data.max()
+        min_val = min(min_val,current_min); max_val = max(max_val,current_max); 
         expected_hist, _ = np.histogram(
             data.flatten(),
             bins=BINS,
