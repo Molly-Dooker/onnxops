@@ -1,4 +1,4 @@
-// observer.h
+// src/observer.h
 #pragma once
 
 #include "onnxruntime_cxx_api.h"
@@ -61,16 +61,6 @@ struct HistogramObserverKernel_CPU {
   std::string id_;
 };
 
-// GPU kernel: same functionality on CUDA
-struct HistogramObserverKernel_CUDA {
-  HistogramObserverKernel_CUDA(const OrtApi& api, const OrtKernelInfo* info);
-  void Compute(OrtKernelContext* context);
-
- private:
-  int64_t bins_;
-  std::string id_;
-};
-
 // CustomOp registration for CPU
 struct HistogramObserverOp_CPU
     : Ort::CustomOpBase<HistogramObserverOp_CPU, HistogramObserverKernel_CPU> {
@@ -85,6 +75,17 @@ struct HistogramObserverOp_CPU
   ONNXTensorElementDataType GetOutputType(size_t /*index*/) const noexcept  {
     return ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT;  // 항상 identity
   }
+};
+
+
+// GPU kernel: same functionality on CUDA
+struct HistogramObserverKernel_CUDA {
+  HistogramObserverKernel_CUDA(const OrtApi& api, const OrtKernelInfo* info);
+  void Compute(OrtKernelContext* context);
+
+ private:
+  int64_t bins_;
+  std::string id_;
 };
 
 // CustomOp registration for CUDA

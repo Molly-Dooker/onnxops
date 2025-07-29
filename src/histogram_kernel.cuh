@@ -1,3 +1,4 @@
+// src/histogram_kernel.cuh
 #pragma once
 
 #include <cstdint>
