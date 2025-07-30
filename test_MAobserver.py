@@ -13,7 +13,7 @@ def create_test_model(observer_id, momentum=0.9, dimension=4 ,model_path="observ
         inputs=['X'],
         outputs=['Y'],
         domain='com.my-quant-lib',   # Custom Op 도메인
-        id=observer_id,
+        name=observer_id,
         momentum=float(momentum)
     )
     graph = onnx.helper.make_graph([observer_node], 'test-observer-graph', [X], [Y])

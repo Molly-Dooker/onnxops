@@ -18,55 +18,56 @@ namespace MyQuantLib {
 // MovingAverageObserverKernel_CPU
 // ────────────────────────────────────────────────────────────────────────────
 MovingAverageObserverKernel_CPU::MovingAverageObserverKernel_CPU(
-	const OrtApi&, const OrtKernelInfo* info) {
-  Ort::ConstKernelInfo k(info);
-  momentum_ = k.GetAttribute<float>("momentum");
-  id_       = k.GetAttribute<std::string>("id");
-  StateManager::get_instance().register_moving_average(id_);
+	const OrtApi& api, const OrtKernelInfo* info) {
+	Ort::ConstKernelInfo k(info);
+	// 1) momentum 읽기 (기존 로직 그대로)
+	momentum_ = k.GetAttribute<float>("momentum");
+	node_name_ = k.GetNodeName();
+	// 3) StateManager 에 node_name_ 로 등록
+	StateManager::get_instance().register_moving_average(node_name_);
 }
 
 void MovingAverageObserverKernel_CPU::Compute(OrtKernelContext* context) {
-  Ort::KernelContext ctx(context);
+	Ort::KernelContext ctx(context);
 
-  auto input      = ctx.GetInput(0);
-  auto info       = input.GetTensorTypeAndShapeInfo();
-  auto shape      = info.GetShape();
-  int64_t N       = info.GetElementCount();
-  const float* X  = input.GetTensorData<float>();
+	auto input      = ctx.GetInput(0);
+	auto info       = input.GetTensorTypeAndShapeInfo();
+	auto shape      = info.GetShape();
+	int64_t N       = info.GetElementCount();
+	const float* X  = input.GetTensorData<float>();
 
-  auto out_value  = ctx.GetOutput(0, shape.data(), shape.size());
-  float*       Y  = out_value.GetTensorMutableData<float>();
+	auto out_value  = ctx.GetOutput(0, shape.data(), shape.size());
+	float*       Y  = out_value.GetTensorMutableData<float>();
 
-  ObserverState* state = StateManager::get_instance().get_state_ptr(id_);
+	ObserverState* state = StateManager::get_instance().get_state_ptr(node_name_);
 
-  float batch_min = std::numeric_limits<float>::max();
-  float batch_max = std::numeric_limits<float>::lowest();
-  for (int64_t i = 0; i < N; ++i) {
-	float v = X[i];
-	batch_min = std::min(batch_min, v);
-	batch_max = std::max(batch_max, v);
-  }
-  if (state->min == std::numeric_limits<float>::max()) {
-	state->min = batch_min;
-	state->max = batch_max;
-  } else {
-	state->min = state->min * momentum_ + batch_min * (1.0f - momentum_);
-	state->max = state->max * momentum_ + batch_max * (1.0f - momentum_);
-  }
-
-  std::copy_n(X, N, Y);
+	float batch_min = std::numeric_limits<float>::max();
+	float batch_max = std::numeric_limits<float>::lowest();
+	for (int64_t i = 0; i < N; ++i) {
+		float v = X[i];
+		batch_min = std::min(batch_min, v);
+		batch_max = std::max(batch_max, v);
+	}
+	if (state->min == std::numeric_limits<float>::max()) {
+		state->min = batch_min;
+		state->max = batch_max;
+	} else {
+		state->min = state->min * momentum_ + batch_min * (1.0f - momentum_);
+		state->max = state->max * momentum_ + batch_max * (1.0f - momentum_);
+	}
+	std::copy_n(X, N, Y);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
 // MovingAverageObserverKernel_CUDA
 // ────────────────────────────────────────────────────────────────────────────
 MovingAverageObserverKernel_CUDA::MovingAverageObserverKernel_CUDA(
-	const OrtApi&, const OrtKernelInfo* info) {
-  Ort::ConstKernelInfo k(info);
-  momentum_ = k.GetAttribute<float>("momentum");
-  id_       = k.GetAttribute<std::string>("id");
-  StateManager::get_instance().register_moving_average(id_);
-}
+	const OrtApi& api, const OrtKernelInfo* info) {
+	Ort::ConstKernelInfo k(info);
+	momentum_ = k.GetAttribute<float>("momentum");
+	node_name_ = k.GetNodeName();
+	StateManager::get_instance().register_moving_average(node_name_);
+	}
 
 void MovingAverageObserverKernel_CUDA::Compute(OrtKernelContext* context) {
   Ort::KernelContext ctx(context);
@@ -83,7 +84,7 @@ void MovingAverageObserverKernel_CUDA::Compute(OrtKernelContext* context) {
   cudaStream_t stream =
 	  reinterpret_cast<cudaStream_t>(ctx.GetGPUComputeStream());
 
-  ObserverState* state = StateManager::get_instance().get_state_ptr(id_);
+  ObserverState* state = StateManager::get_instance().get_state_ptr(node_name_);
   launch_observer_kernel(X, Y, N, state, momentum_, stream);
 }
 
@@ -137,10 +138,10 @@ MovingAverageObserverOp_CUDA::GetOutputType(size_t) const {
 // ────────────────────────────────────────────────────────────────────────────
 HistogramObserverKernel_CPU::HistogramObserverKernel_CPU(
 	const OrtApi& api, const OrtKernelInfo* info) {
-  Ort::ConstKernelInfo k(info);
-  bins_ = k.GetAttribute<int64_t>("bins");
-  id_   = k.GetAttribute<std::string>("id");
-  StateManager::get_instance().register_histogram(id_, bins_);
+	Ort::ConstKernelInfo k(info);
+	bins_ = k.GetAttribute<int64_t>("bins");
+	node_name_ = k.GetNodeName();
+	StateManager::get_instance().register_histogram(node_name_, bins_);
 }
 
 void HistogramObserverKernel_CPU::Compute(OrtKernelContext* context) {
@@ -181,7 +182,7 @@ void HistogramObserverKernel_CPU::Compute(OrtKernelContext* context) {
   std::copy(X, X + N, Y);
 
   // 4) StateManager에 기록
-  ObserverState* st = StateManager::get_instance().get_state_ptr(id_);
+  ObserverState* st = StateManager::get_instance().get_state_ptr(node_name_);
   st->hist = std::move(hist_data);
   st->min  = min_val;
   st->max  = max_val;
@@ -192,10 +193,10 @@ void HistogramObserverKernel_CPU::Compute(OrtKernelContext* context) {
 // ────────────────────────────────────────────────────────────────────────────
 HistogramObserverKernel_CUDA::HistogramObserverKernel_CUDA(
 	const OrtApi& api, const OrtKernelInfo* info) {
-  Ort::ConstKernelInfo k(info);
-  bins_ = k.GetAttribute<int64_t>("bins");
-  id_   = k.GetAttribute<std::string>("id");
-  StateManager::get_instance().register_histogram(id_, bins_);
+	Ort::ConstKernelInfo k(info);
+	bins_ = k.GetAttribute<int64_t>("bins");
+	node_name_ = k.GetNodeName();
+	StateManager::get_instance().register_histogram(node_name_, bins_);
 }
 
 void HistogramObserverKernel_CUDA::Compute(OrtKernelContext* context) {
@@ -216,7 +217,7 @@ void HistogramObserverKernel_CUDA::Compute(OrtKernelContext* context) {
   float* Y = out.GetTensorMutableData<float>();
 
   // 3) StateManager가 초기화 시 할당해둔 디바이스 버퍼 꺼내기
-  ObserverState* st = StateManager::get_instance().get_state_ptr(id_);
+  ObserverState* st = StateManager::get_instance().get_state_ptr(node_name_);
   int64_t*      dH = reinterpret_cast<int64_t*>(st->device_hist_buffer);
 
   // 4) 현재 입력(X)의 min/max 값 계산

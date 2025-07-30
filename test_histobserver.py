@@ -26,7 +26,7 @@ def create_histogram_model(observer_id, bins, dimension=2, model_path="histogram
 		inputs=['X'],
 		outputs=['Y'],
 		domain='com.my-quant-lib',
-		id=observer_id,
+		name=observer_id,
 		bins=bins
 	)
 
@@ -85,6 +85,5 @@ if __name__ == "__main__":
 			f"hist: {percent_err:.6f}%  | "
 			f"Max val: {rel_max_err:.4f}% | "
 			f"Min val: {rel_min_err:.4f}%"
-			f'{counts_dict}'
 		)
 

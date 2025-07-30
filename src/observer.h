@@ -13,7 +13,7 @@ struct MovingAverageObserverKernel_CPU {
 
 private:
   float momentum_;
-  std::string id_;
+  std::string node_name_;
 };
 
 // ─ GPU 커널 ───────────────────────────────────────────────────────────────
@@ -23,7 +23,7 @@ struct MovingAverageObserverKernel_CUDA {
 
 private:
   float momentum_;
-  std::string id_;
+  std::string node_name_;
 };
 
 // ─ CustomOp 등록 (CPU 전용) ───────────────────────────────────────────────
@@ -58,7 +58,7 @@ struct HistogramObserverKernel_CPU {
 
  private:
   int64_t bins_;
-  std::string id_;
+  std::string node_name_;
 };
 
 // CustomOp registration for CPU
@@ -85,7 +85,7 @@ struct HistogramObserverKernel_CUDA {
 
  private:
   int64_t bins_;
-  std::string id_;
+  std::string node_name_;
 };
 
 // CustomOp registration for CUDA
