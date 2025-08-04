@@ -8,3 +8,4 @@ onnxruntime-gpu==1.22.0
 numpy==2.1.1
 pybind11==3.0.0
 ipdb==0.13.13
+auditwheel==6.4.2
