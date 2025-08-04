@@ -4,6 +4,11 @@ cmake_minimum_required(VERSION 3.19)
 # 프로젝트 이름 및 언어 설정
 project(MyQuantLib LANGUAGES CXX CUDA)
 
+# 기본 빌드 타입이 지정되지 않았다면 Release로 설정
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build." FORCE)
+endif()
+
 # 모듈 경로 추가
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 # CMAKE_SOURCE_DIR : 최상단 위치

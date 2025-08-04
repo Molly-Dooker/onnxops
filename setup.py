@@ -1,9 +1,8 @@
-# setup.py
+# setup.py onnxops
 
 import setuptools
 import shutil
 import glob
-import os
 from pathlib import Path
 from setuptools.command.build_py import build_py as _build_py
 
